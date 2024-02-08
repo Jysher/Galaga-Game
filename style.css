@@ -20,6 +20,6 @@ body {
   max-height: 100%;
 }
 
-#bg, #player, #enemy-1, #enemy-2 {
+#bg, #player, #playerProjectile, #enemy-1, #enemy-2, #enemy-3, #enemy-4 {
   display: none;
 }
