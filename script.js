@@ -1,6 +1,49 @@
 'use strict';
 
 window.addEventListener('load', function () {
+    const video = document.getElementById('webCam')
+    const videoCanvas = document.getElementById('videoCanvas');
+    const videoContext = videoCanvas.getContext('2d');
+    const blendCanvas = document.getElementById('blendCanvas');
+    const blendContext = videoCanvas.getContext('2d');
+
+    // if (navigator.mediaDevices.getUserMedia) {
+    //     navigator.mediaDevices.getUserMedia({ video: true })
+    //         .then((stream) => {
+    //             video.srcObject = stream;
+    //         })
+    //         .catch((error) => {
+    //             console.error('Error accessing webcam:', error);
+    //         });
+    // } else {
+    //     console.error('getUserMedia not supported in this browser.');
+    // }
+
+    navigator.getUserMedia({ video: true }, gotStream, noStream);
+
+    function gotStream(stream) {
+        video.srcObject = stream;
+    }
+
+    function noStream() {
+        alert("No webcam found!");
+    }
+
+    function drawVideoCanvas() {
+        videoContext.clearRect(0, 0, videoCanvas.width, videoCanvas.height);
+        videoContext.drawImage(video, 0, 0, videoCanvas.width, videoCanvas.height);
+        requestAnimationFrame(drawVideoCanvas);
+    }
+
+    function drawBlendCanvas() {
+        blendContext.clearRect(0, 0, blendCanvas.width, blendCanvas.height);
+        blendContext.drawImage(video, 0, 0, blendCanvas.width, blendCanvas.height);
+        requestAnimationFrame(drawBlendCanvas);
+    }
+
+    drawVideoCanvas();
+    drawBlendCanvas();
+
     // Canvas Setup
     const canvas = document.getElementById('canvas-1');
     const ctx = canvas.getContext('2d');
@@ -20,6 +63,8 @@ window.addEventListener('load', function () {
                 }
 
                 if (e.key === 'd') this.game.debugMode = !this.game.debugMode;
+
+                if (e.key === 'Enter') this.game.gameStart = !this.game.gameStart;
             });
 
             window.addEventListener('keyup', e => {
@@ -310,13 +355,47 @@ window.addEventListener('load', function () {
             context.fillText('Score: ' + this.game.score, (this.game.width * .5) - 50, 40);
 
             // Game Time
-            context.fillText('Time: ' + (this.game.deltaTime * .001).toFixed(1), this.game.width - 150, 40);
+            context.fillText(`Time: ${this.game.gameTimeHours}:${this.game.gameTimeMinutes}:${(this.game.gameTimeSeconds * .001).toFixed(1)}`, this.game.width * .8, 40);
 
             // Player Lives
             for (let i = 0; i < this.game.playerLives; i++) {
                 context.fillStyle = this.lifeColor;
-                context.drawImage(this.game.player.image, 20 + 50 * i, 20, this.game.player.width * .75, this.game.player.height * .75);
+                context.drawImage(this.game.player.image, 20 + 50 * i, 20, this.game.player.width * .75 / .5, this.game.player.height * .75);
             }
+
+            context.restore();
+        }
+    }
+
+    class SplashScreen {
+        constructor(game) {
+            this.game = game;
+            this.titleFontSize = 80;
+            this.textFontSize = 45;
+            this.fontFamily = 'Nunito';
+            this.fontColor = 'white';
+            this.titleMaxWidth = 350;
+            this.titlePaddingX = 100;
+        }
+
+        update() {
+
+        }
+
+        draw(context) {
+            context.save();
+            context.fillStyle = this.fontColor;
+
+            // Title
+            context.font = this.titleFontSize + 'px ' + this.fontFamily;
+            context.textAlign = 'center';
+            context.fillText(`SPACE DEFENDER`, this.game.width * .5, this.game.height * .35);
+
+            // Controls
+            context.font = this.textFontSize + 'px ' + this.fontFamily;
+            context.fillText(`Press Enter to Start`, this.game.width * .5, this.game.height * .5);
+
+
 
             context.restore();
         }
@@ -326,13 +405,17 @@ window.addEventListener('load', function () {
         constructor(width, height) {
             this.width = width;
             this.height = height;
+            this.splashScreen = new SplashScreen(this);
             this.background = new Background(this);
             this.ui = new UI(this);
+            this.input = new InputHandler(this);
             this.player = new Player(this);
             this.playerLives = 3;
-            this.input = new InputHandler(this);
             this.keys = [];
             this.deltaTime = 0;
+            this.gameTimeSeconds = 0;
+            this.gameTimeMinutes = 0;
+            this.gameTimeHours = 0;
             this.enemyClasses = [
                 BlackEnemy1,
                 BlackEnemy2,
@@ -425,6 +508,7 @@ window.addEventListener('load', function () {
 
             this.score = 0;
             this.gameSpeed = 1;
+            this.gameStart = false;
             this.gameOver = false;
             this.debugMode = false;
         }
@@ -433,41 +517,63 @@ window.addEventListener('load', function () {
             this.deltaTime += deltaTime;
             this.background.update();
             this.player.update(deltaTime);
-            if (this.firstRowEnemies.length === 0 && this.isFirstRowComplete) this.firstRowSpawnCounter += deltaTime;
-            if (this.secondRowEnemies.length === 0 && this.isSecondRowComplete) this.secondRowSpawnCounter += deltaTime;
-            if (this.thirdRowEnemies.length === 0 && this.isThirdRowComplete) this.thirdRowSpawnCounter += deltaTime;
-            if (this.fourthRowEnemies.length === 0 && this.isFourthRowComplete) this.fourthRowSpawnCounter += deltaTime;
 
-            this.firstRowEnemies.forEach(enemy => enemy.update(deltaTime));
-            this.firstRowEnemies = this.firstRowEnemies.filter(enemy => !enemy.forDeletion);
+            if (this.gameStart) {
+                this.gameTimeSeconds += deltaTime;
+                if (this.gameTimeSeconds > 60000) {
+                    this.gameTimeMinutes++;
+                    this.gameTimeSeconds = 0;
+                }
+                if (this.gameTimeMinutes >= 60) {
+                    this.gameTimeHours++;
+                    this.gameTimeMinutes = 0;
+                }
 
-            this.secondRowEnemies.forEach(enemy => enemy.update(deltaTime));
-            this.secondRowEnemies = this.secondRowEnemies.filter(enemy => !enemy.forDeletion);
+                if (this.firstRowEnemies.length === 0 && this.isFirstRowComplete) this.firstRowSpawnCounter += deltaTime;
+                if (this.secondRowEnemies.length === 0 && this.isSecondRowComplete) this.secondRowSpawnCounter += deltaTime;
+                if (this.thirdRowEnemies.length === 0 && this.isThirdRowComplete) this.thirdRowSpawnCounter += deltaTime;
+                if (this.fourthRowEnemies.length === 0 && this.isFourthRowComplete) this.fourthRowSpawnCounter += deltaTime;
 
-            this.thirdRowEnemies.forEach(enemy => enemy.update(deltaTime));
-            this.thirdRowEnemies = this.thirdRowEnemies.filter(enemy => !enemy.forDeletion);
+                this.firstRowEnemies.forEach(enemy => enemy.update(deltaTime));
+                this.firstRowEnemies = this.firstRowEnemies.filter(enemy => !enemy.forDeletion);
 
-            this.fourthRowEnemies.forEach(enemy => enemy.update(deltaTime));
-            this.fourthRowEnemies = this.fourthRowEnemies.filter(enemy => !enemy.forDeletion);
+                this.secondRowEnemies.forEach(enemy => enemy.update(deltaTime));
+                this.secondRowEnemies = this.secondRowEnemies.filter(enemy => !enemy.forDeletion);
 
-            this.onEnemyCollision(...this.firstRowEnemies, ...this.secondRowEnemies, ...this.thirdRowEnemies, ...this.fourthRowEnemies);
+                this.thirdRowEnemies.forEach(enemy => enemy.update(deltaTime));
+                this.thirdRowEnemies = this.thirdRowEnemies.filter(enemy => !enemy.forDeletion);
 
-            if (!this.gameOver) {
-                this.addEnemy();
+                this.fourthRowEnemies.forEach(enemy => enemy.update(deltaTime));
+                this.fourthRowEnemies = this.fourthRowEnemies.filter(enemy => !enemy.forDeletion);
+
+                this.onEnemyCollision(...this.firstRowEnemies, ...this.secondRowEnemies, ...this.thirdRowEnemies, ...this.fourthRowEnemies);
+
+                if (!this.gameOver) {
+                    this.addEnemy();
+                }
+
+            } else {
+                this.splashScreen.update();
             }
         }
 
         draw(context) {
             this.background.draw(context);
-            this.ui.draw(context);
             this.player.draw(context);
-            this.firstRowEnemies.forEach(enemy => enemy.draw(context));
 
-            this.secondRowEnemies.forEach(enemy => enemy.draw(context));
+            if (this.gameStart) {
+                this.ui.draw(context);
+                this.firstRowEnemies.forEach(enemy => enemy.draw(context));
 
-            this.thirdRowEnemies.forEach(enemy => enemy.draw(context));
+                this.secondRowEnemies.forEach(enemy => enemy.draw(context));
 
-            this.fourthRowEnemies.forEach(enemy => enemy.draw(context));
+                this.thirdRowEnemies.forEach(enemy => enemy.draw(context));
+
+                this.fourthRowEnemies.forEach(enemy => enemy.draw(context));
+
+            } else {
+                this.splashScreen.draw(context);
+            }
         }
 
         addEnemy() {
