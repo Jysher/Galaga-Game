@@ -1,23 +1,42 @@
 'use strict';
 
 window.addEventListener('load', function () {
+    // Canvas Setup
+    const canvas = document.getElementById('canvas-1');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1440;
+    canvas.height = 1080;
+
+    // Webcam Setup
     const video = document.getElementById('webCam')
     const videoCanvas = document.getElementById('videoCanvas');
-    const videoContext = videoCanvas.getContext('2d');
+    const videoContext = videoCanvas.getContext('2d', { willReadFrequently: true });
     const blendCanvas = document.getElementById('blendCanvas');
-    const blendContext = videoCanvas.getContext('2d');
-
-    // if (navigator.mediaDevices.getUserMedia) {
-    //     navigator.mediaDevices.getUserMedia({ video: true })
-    //         .then((stream) => {
-    //             video.srcObject = stream;
-    //         })
-    //         .catch((error) => {
-    //             console.error('Error accessing webcam:', error);
-    //         });
-    // } else {
-    //     console.error('getUserMedia not supported in this browser.');
-    // }
+    const blendContext = blendCanvas.getContext('2d', { willReadFrequently: true });
+    let currentImage, lastImage, blendImage;
+    const controlAreas = [
+        {
+            name: 'Left',
+            x: blendCanvas.width * .80,
+            y: 0,
+            width: blendCanvas.width * .20,
+            height: blendCanvas.height
+        },
+        {
+            name: 'Right',
+            x: 0,
+            y: 0,
+            width: blendCanvas.width * .20,
+            height: blendCanvas.height
+        },
+        {
+            name: 'Shoot',
+            x: blendCanvas.width * .20,
+            y: 0,
+            width: blendCanvas.width * .60,
+            height: blendCanvas.height
+        }
+    ];
 
     navigator.getUserMedia({ video: true }, gotStream, noStream);
 
@@ -29,27 +48,70 @@ window.addEventListener('load', function () {
         alert("No webcam found!");
     }
 
-    function drawVideoCanvas() {
+    function drawVideoCanvas(game) {
         videoContext.clearRect(0, 0, videoCanvas.width, videoCanvas.height);
         videoContext.drawImage(video, 0, 0, videoCanvas.width, videoCanvas.height);
-        requestAnimationFrame(drawVideoCanvas);
+        drawBlendCanvas();
+        checkAreas(game);
     }
 
     function drawBlendCanvas() {
-        blendContext.clearRect(0, 0, blendCanvas.width, blendCanvas.height);
-        blendContext.drawImage(video, 0, 0, blendCanvas.width, blendCanvas.height);
-        requestAnimationFrame(drawBlendCanvas);
+        let width = videoCanvas.width;
+        let height = videoCanvas.height;
+        currentImage = videoContext.getImageData(0, 0, width, height,);
+        if (!lastImage) lastImage = videoContext.getImageData(0, 0, width, height);
+        blendImage = videoContext.createImageData(width, height);
+        checkDiff(currentImage.data, lastImage.data, blendImage.data);
+        blendContext.putImageData(blendImage, 0, 0);
+
+        lastImage = currentImage;
     }
 
-    drawVideoCanvas();
-    drawBlendCanvas();
+    function threshold(value) {
+        return (value > 0x15) ? 0xff : 0;
+    }
 
-    // Canvas Setup
-    const canvas = document.getElementById('canvas-1');
-    const ctx = canvas.getContext('2d');
-    canvas.width = 1440;
-    canvas.height = 1080;
+    function checkDiff(currentImage, lastImage, blendImage) {
+        if (currentImage.length != lastImage.length) return null;
+        let i = 0;
+        while (i < (currentImage.length / 4)) {
+            let average1 = (currentImage[4 * i] + currentImage[4 * i + 1] + currentImage[4 * i + 2]) / 3;
+            let average2 = (lastImage[4 * i] + lastImage[4 * i + 1] + lastImage[4 * i + 2]) / 3;
+            let diff = threshold(Math.abs(average1 - average2));
+            blendImage[4 * i] = diff;
+            blendImage[4 * i + 1] = diff;
+            blendImage[4 * i + 2] = diff;
+            blendImage[4 * i + 3] = 0xff;
+            ++i;
+        }
+    }
 
+    function checkAreas(game) {
+        controlAreas.forEach(area => {
+            videoContext.strokeStyle = 'red';
+            videoContext.strokeRect(area.x, area.y, area.width, area.height);
+
+            let name = area.name;
+            let blendData = blendContext.getImageData(area.x, area.y, area.width, area.height);
+            let i = 0;
+            let average = 0;
+
+            while (i < (blendData.data.length / 4)) {
+                average += (blendData.data[i * 4] + blendData.data[i * 4 + 1] + blendData.data[i * 4 + 2]) / 3;
+                ++i;
+            }
+
+            average = (Math.round(average / (blendData.data.length / 4)));
+
+            if (average > 10) {
+                if (area.name === 'Left') game.player.moveLeft(2);
+                if (area.name === 'Right') game.player.moveRight(2);
+                if (area.name === 'Shoot') game.player.shoot();
+            }
+        });
+    }
+
+    //Classes Setup
     class InputHandler {
         constructor(game) {
             this.game = game;
@@ -64,7 +126,11 @@ window.addEventListener('load', function () {
 
                 if (e.key === 'd') this.game.debugMode = !this.game.debugMode;
 
-                if (e.key === 'Enter') this.game.gameStart = !this.game.gameStart;
+                if (e.key === 'Enter' && !this.game.gameStart) {
+                    this.game.gameStart = !this.game.gameStart;
+                    this.game.restartGame();
+                }
+                if (e.key === 'Enter' && this.game.gameOver) this.game.restartGame();
             });
 
             window.addEventListener('keyup', e => {
@@ -141,7 +207,9 @@ window.addEventListener('load', function () {
             this.height = this.image.height * .60;
             this.x = (this.game.width * .5) - (this.width * .5);
             this.y = (this.game.height * .95) - (this.height * .95);
+            this.boundsX = (this.game.width * .5) - this.width;
             this.movementSpeedX = 2;
+            this.speedMultiplier = 1;
             this.projectiles = [];
             this.fireRate = 250; // in milliseconds
             this.lastFireTimeStamp = 0;
@@ -150,8 +218,8 @@ window.addEventListener('load', function () {
         update(deltaTime) {
             // Movement & Shooting
             if (this.game.gameOver) return;
-            if (this.game.keys.includes('ArrowLeft') && this.x > 0) this.x -= this.movementSpeedX;
-            if (this.game.keys.includes('ArrowRight') && this.x + this.width < this.game.width) this.x += this.movementSpeedX;
+            if (this.game.keys.includes('ArrowLeft')) this.moveLeft(this.speedMultiplier);
+            if (this.game.keys.includes('ArrowRight')) this.moveRight(this.speedMultiplier);
 
             if (this.game.keys.includes(' ')) this.shoot();
 
@@ -172,11 +240,33 @@ window.addEventListener('load', function () {
             context.drawImage(this.image, this.x - (this.width * .5), this.y, this.width / .5, this.height);
         }
 
+        moveLeft(speedMultiplier = 1) {
+            if (this.boundsX > 0) {
+                this.x = this.x - this.movementSpeedX * speedMultiplier;
+                this.boundsX = this.boundsX - this.movementSpeedX * speedMultiplier;
+            }
+        }
+
+        moveRight(speedMultiplier = 1) {
+            if (this.boundsX + (this.width / .5) < this.game.width) {
+                this.x = this.x + this.movementSpeedX * speedMultiplier;
+                this.boundsX = this.boundsX + this.movementSpeedX * speedMultiplier;
+            }
+        }
+
         shoot() {
             if (this.lastFireTimeStamp > this.fireRate) {
                 this.projectiles.push(new PlayerProjectile(this.game, this.x + (this.width * .35), this.y));
                 this.lastFireTimeStamp = 0;
             }
+        }
+
+        restart() {
+            this.projectiles.length = 0;
+            this.x = (this.game.width * .5) - (this.width * .5);
+            this.y = (this.game.height * .95) - (this.height * .95);
+            this.boundsX = (this.game.width * .5) - this.width;
+            this.lastFireTimeStamp = 0;
         }
     }
 
@@ -188,9 +278,12 @@ window.addEventListener('load', function () {
             this.forDeletion = false;
             this.projectileImage = document.getElementById('enemy-default-projectile');
             this.projectiles = [];
-            // this.speed = 2;
+            this.fireSuccessChance = 10;
+            this.fireRateStartRange = 5;
+            this.fireRateEndRange = 60;
             this.lastFireTimeStamp = 0;
             // this.fireRate = 3000
+            // this.speed = 2;
         }
 
         update(deltaTime) {
@@ -214,10 +307,21 @@ window.addEventListener('load', function () {
         }
 
         shoot() {
-            let randomFireRate = Math.floor(Math.random() * 60 + 4) * 1000;
+            let randomFireRate = Math.floor(Math.random() * this.fireRateEndRange + this.fireRateStartRange) * 1000;
             if (this.lastFireTimeStamp > randomFireRate) {
-                this.projectiles.push(new EnemyProjectile(this.game, this.x + (this.width * .44), this.y, this.projectileImage));
+                let fireChance = Math.floor(Math.random() * 100);
+                if (fireChance < this.fireSuccessChance) this.projectiles.push(new EnemyProjectile(this.game, this.x + (this.width * .44), this.y, this.projectileImage));
                 this.lastFireTimeStamp = 0;
+            }
+
+            if (this.game.gameTimeMinutes > this.game.timeToIncreaseDifficulty) {
+                if (this.fireSuccessChance < 100) this.fireSuccessChance += 5;
+                if (this.fireSuccessChance >= 100) {
+                    if (this.fireRateStartRange > 1) this.fireRateStartRange--;
+                }
+
+                if (this.game.gameTimeMinutes < 60) this.game.timeToIncreaseDifficulty += this.game.gameTimeMinutes;
+                else this.game.gameTimeMinutes = 5;
             }
         }
     }
@@ -349,18 +453,33 @@ window.addEventListener('load', function () {
 
         draw(context) {
             context.save();
-            context.fillStyle = this.scoreColor;
-            // Score
-            context.font = this.fontSize + 'px ' + this.fontFamily;
-            context.fillText('Score: ' + this.game.score, (this.game.width * .5) - 50, 40);
 
-            // Game Time
-            context.fillText(`Time: ${this.game.gameTimeHours}:${this.game.gameTimeMinutes}:${(this.game.gameTimeSeconds * .001).toFixed(1)}`, this.game.width * .8, 40);
+            if (!this.game.gameOver) {
+                context.fillStyle = this.scoreColor;
+                // Score
+                context.font = this.fontSize + 'px ' + this.fontFamily;
+                context.fillText('Score: ' + this.game.score, (this.game.width * .5) - 50, 40);
 
-            // Player Lives
-            for (let i = 0; i < this.game.playerLives; i++) {
-                context.fillStyle = this.lifeColor;
-                context.drawImage(this.game.player.image, 20 + 50 * i, 20, this.game.player.width * .75 / .5, this.game.player.height * .75);
+                // Game Time
+                context.fillText(`Time: ${this.game.gameTimeHours}:${this.game.gameTimeMinutes}:${(this.game.gameTimeSeconds * .001).toFixed(1)}`, this.game.width * .8, 40);
+
+                // Player Lives
+                for (let i = 0; i < this.game.playerLives; i++) {
+                    context.fillStyle = this.lifeColor;
+                    context.drawImage(this.game.player.image, 20 + 50 * i, 20, this.game.player.width * .75 / .5, this.game.player.height * .75);
+                }
+            } else {
+                context.textAlign = 'center';
+                context.fillStyle = 'black';
+                context.font = '80px ' + this.fontFamily;
+                context.fillText('GAME OVER', this.game.width * .5, this.game.height * .35);
+                context.fillStyle = 'white';
+                context.fillText('GAME OVER', this.game.width * .5 + 2, this.game.height * .35 + 2);
+
+                context.font = '45px ' + this.fontFamily;
+                context.fillText(`Your Score: ${this.game.score}`, this.game.width * .5, this.game.height * .35 + 75);
+                context.fillText(`Time Survived: ${this.game.timeSurvived}`, this.game.width * .5, this.game.height * .35 + 150);
+                context.fillText('Press Enter to Restart', this.game.width * .5, this.game.height * .6);
             }
 
             context.restore();
@@ -416,6 +535,8 @@ window.addEventListener('load', function () {
             this.gameTimeSeconds = 0;
             this.gameTimeMinutes = 0;
             this.gameTimeHours = 0;
+            this.timeToIncreaseDifficulty = 5;
+            this.timeSurvived = '';
             this.enemyClasses = [
                 BlackEnemy1,
                 BlackEnemy2,
@@ -427,7 +548,7 @@ window.addEventListener('load', function () {
             this.xPadding = 100;
 
             this.firstRowAxisY = 100;
-            this.firstEnemyRow = [
+            this.firstEnemyRowLoc = [
                 [this.xAxis, this.firstRowAxisY],
                 [(this.xAxis + this.xPadding), this.firstRowAxisY],
                 [(this.xAxis + this.xPadding * 2), this.firstRowAxisY],
@@ -447,7 +568,7 @@ window.addEventListener('load', function () {
             this.firstRowRespawn = 5000;
 
             this.secondRowAxisY = 200;
-            this.secondEnemyRow = [
+            this.secondEnemyRowLoc = [
                 [this.xAxis, this.secondRowAxisY],
                 [(this.xAxis + this.xPadding), this.secondRowAxisY],
                 [(this.xAxis + this.xPadding * 2), this.secondRowAxisY],
@@ -467,7 +588,7 @@ window.addEventListener('load', function () {
             this.secondRowRespawn = 5000;
 
             this.thirdRowAxisY = 300;
-            this.thirdEnemyRow = [
+            this.thirdEnemyRowLoc = [
                 [this.xAxis, this.thirdRowAxisY],
                 [(this.xAxis + this.xPadding), this.thirdRowAxisY],
                 [(this.xAxis + this.xPadding * 2), this.thirdRowAxisY],
@@ -487,7 +608,7 @@ window.addEventListener('load', function () {
             this.thirdRowRespawn = 5000;
 
             this.fourthRowAxisY = 400;
-            this.fourthEnemyRow = [
+            this.fourthEnemyRowLoc = [
                 [this.xAxis, this.fourthRowAxisY],
                 [(this.xAxis + this.xPadding), this.fourthRowAxisY],
                 [(this.xAxis + this.xPadding * 2), this.fourthRowAxisY],
@@ -550,6 +671,12 @@ window.addEventListener('load', function () {
 
                 if (!this.gameOver) {
                     this.addEnemy();
+                } else {
+                    this.firstRowEnemies.length = 0;
+                    this.secondRowEnemies.length = 0;
+                    this.thirdRowEnemies.length = 0;
+                    this.fourthRowEnemies.length = 0;
+                    this.player.projectiles.length = 0;
                 }
 
             } else {
@@ -562,7 +689,6 @@ window.addEventListener('load', function () {
             this.player.draw(context);
 
             if (this.gameStart) {
-                this.ui.draw(context);
                 this.firstRowEnemies.forEach(enemy => enemy.draw(context));
 
                 this.secondRowEnemies.forEach(enemy => enemy.draw(context));
@@ -574,6 +700,8 @@ window.addEventListener('load', function () {
             } else {
                 this.splashScreen.draw(context);
             }
+
+            this.ui.draw(context);
         }
 
         addEnemy() {
@@ -600,33 +728,33 @@ window.addEventListener('load', function () {
             }
 
             if (!this.isFirstRowComplete) {
-                for (let i = 0; i < this.firstEnemyRow.length; i++) {
+                for (let i = 0; i < this.firstEnemyRowLoc.length; i++) {
                     randomEnemy = Math.floor(Math.random() * this.enemyClasses.length);
-                    this.firstRowEnemies.push(new this.enemyClasses[randomEnemy](this, this.firstEnemyRow[i][0], this.firstEnemyRow[i][1]));
+                    this.firstRowEnemies.push(new this.enemyClasses[randomEnemy](this, this.firstEnemyRowLoc[i][0], this.firstEnemyRowLoc[i][1]));
                 }
                 this.isFirstRowComplete = true;
             }
 
             if (!this.isSecondRowComplete) {
-                for (let i = 0; i < this.secondEnemyRow.length; i++) {
+                for (let i = 0; i < this.secondEnemyRowLoc.length; i++) {
                     randomEnemy = Math.floor(Math.random() * this.enemyClasses.length);
-                    this.secondRowEnemies.push(new this.enemyClasses[randomEnemy](this, this.secondEnemyRow[i][0], this.secondEnemyRow[i][1]));
+                    this.secondRowEnemies.push(new this.enemyClasses[randomEnemy](this, this.secondEnemyRowLoc[i][0], this.secondEnemyRowLoc[i][1]));
                 }
                 this.isSecondRowComplete = true;
             }
 
             if (!this.isThirdRowComplete) {
-                for (let i = 0; i < this.thirdEnemyRow.length; i++) {
+                for (let i = 0; i < this.thirdEnemyRowLoc.length; i++) {
                     randomEnemy = Math.floor(Math.random() * this.enemyClasses.length);
-                    this.thirdRowEnemies.push(new this.enemyClasses[randomEnemy](this, this.thirdEnemyRow[i][0], this.thirdEnemyRow[i][1]));
+                    this.thirdRowEnemies.push(new this.enemyClasses[randomEnemy](this, this.thirdEnemyRowLoc[i][0], this.thirdEnemyRowLoc[i][1]));
                 }
                 this.isThirdRowComplete = true;
             }
 
             if (!this.isFourthRowComplete) {
-                for (let i = 0; i < this.fourthEnemyRow.length; i++) {
+                for (let i = 0; i < this.fourthEnemyRowLoc.length; i++) {
                     randomEnemy = Math.floor(Math.random() * this.enemyClasses.length);
-                    this.fourthRowEnemies.push(new this.enemyClasses[randomEnemy](this, this.fourthEnemyRow[i][0], this.fourthEnemyRow[i][1]));
+                    this.fourthRowEnemies.push(new this.enemyClasses[randomEnemy](this, this.fourthEnemyRowLoc[i][0], this.fourthEnemyRowLoc[i][1]));
                 }
                 this.isFourthRowComplete = true;
             }
@@ -646,12 +774,7 @@ window.addEventListener('load', function () {
                 // Check for Player-Enemy Collision
                 if (this.checkCollision(this.player, enemy)) {
                     enemy.forDeletion = true;
-                    this.playerLives--;
-                    if (this.playerLives <= 0) {
-                        this.player.x = 5000;
-                        this.player.y = 5000;
-                        this.gameOver = true;
-                    }
+                    this.onPlayerHit();
                 }
 
                 // Check for Player Projectile-Enemy Collision
@@ -671,15 +794,40 @@ window.addEventListener('load', function () {
                 enemy.projectiles.forEach(projectile => {
                     if (this.checkCollision(projectile, this.player)) {
                         projectile.forDeletion = true;
-                        this.playerLives--;
-                        if (this.playerLives <= 0) {
-                            this.player.x = 5000;
-                            this.player.y = 5000;
-                            this.gameOver = true;
-                        }
+                        this.onPlayerHit();
                     }
                 });
             });
+        }
+
+        onPlayerHit() {
+            this.playerLives--;
+            if (this.playerLives <= 0) {
+                this.player.x = 5000;
+                this.player.y = 5000;
+                this.gameOver = true;
+                this.timeSurvived = this.gameTimeHours + ":" + this.gameTimeMinutes + ":" + (this.gameTimeSeconds * .001).toFixed(1);
+            }
+        }
+
+        restartGame() {
+            this.gameOver = false;
+            this.player.restart();
+            this.playerLives = 3;
+            this.deltaTime = 0;
+            this.score = 0;
+            this.gameTimeSeconds = 0;
+            this.gameTimeMinutes = 0;
+            this.gameTimeHours = 0;
+            this.keys.length = 0;
+            this.firstRowEnemies.length = 0;
+            this.secondRowEnemies.length = 0;
+            this.thirdRowEnemies.length = 0;
+            this.fourthRowEnemies.length = 0;
+            this.isFirstRowComplete = false;
+            this.isSecondRowComplete = false;
+            this.isThirdRowComplete = false;
+            this.isFourthRowComplete = false;
         }
     }
 
@@ -693,6 +841,7 @@ window.addEventListener('load', function () {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         game.update(deltaTime);
         game.draw(ctx);
+        drawVideoCanvas(game);
         requestAnimationFrame(drawGame);
     }
 
