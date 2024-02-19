@@ -17,23 +17,23 @@ window.addEventListener('load', function () {
     const controlAreas = [
         {
             name: 'Left',
-            x: blendCanvas.width * .80,
+            x: blendCanvas.width * .75,
             y: 0,
-            width: blendCanvas.width * .20,
+            width: blendCanvas.width * .25,
             height: blendCanvas.height
         },
         {
             name: 'Right',
             x: 0,
             y: 0,
-            width: blendCanvas.width * .20,
+            width: blendCanvas.width * .25,
             height: blendCanvas.height
         },
         {
             name: 'Shoot',
-            x: blendCanvas.width * .20,
+            x: blendCanvas.width * .25,
             y: 0,
-            width: blendCanvas.width * .60,
+            width: blendCanvas.width * .50,
             height: blendCanvas.height
         }
     ];
@@ -213,6 +213,12 @@ window.addEventListener('load', function () {
             this.projectiles = [];
             this.fireRate = 250; // in milliseconds
             this.lastFireTimeStamp = 0;
+            this.isInvincible = false;
+            this.timeInvincible = 3000; //in milliseconds
+            this.blinkRate = 250;
+            this.blinkTimer = this.blinkRate * 2;
+            this.defaultBlinkTimer = this.blinkTimer;
+            this.isBlinking = false;
         }
 
         update(deltaTime) {
@@ -227,6 +233,28 @@ window.addEventListener('load', function () {
             this.lastFireTimeStamp += deltaTime;
             this.projectiles.forEach(projectile => projectile.update());
             this.projectiles = this.projectiles.filter(projectile => !projectile.forDeletion);
+
+            if (this.isInvincible) {
+                this.timeInvincible -= deltaTime;
+                if (this.timeInvincible <= 0) {
+                    this.isInvincible = false;
+                    this.isBlinking = false;
+                    this.timeInvincible = 3000;
+                    return;
+                }
+
+                if (this.blinkTimer >= this.blinkRate) {
+                    this.isBlinking = true;
+                    this.blinkTimer -= deltaTime;
+                }
+
+                if (this.blinkTimer <= this.blinkRate) {
+                    this.isBlinking = false;
+                    this.blinkTimer -= deltaTime;
+                }
+
+                if (this.blinkTimer <= 0) this.blinkTimer = this.defaultBlinkTimer;
+            }
         }
 
         draw(context) {
@@ -237,7 +265,7 @@ window.addEventListener('load', function () {
 
             this.projectiles.forEach(projectile => projectile.draw(context));
 
-            context.drawImage(this.image, this.x - (this.width * .5), this.y, this.width / .5, this.height);
+            if (!this.isBlinking) context.drawImage(this.image, this.x - (this.width * .5), this.y, this.width / .5, this.height);
         }
 
         moveLeft(speedMultiplier = 1) {
@@ -278,16 +306,13 @@ window.addEventListener('load', function () {
             this.forDeletion = false;
             this.projectileImage = document.getElementById('enemy-default-projectile');
             this.projectiles = [];
-            this.fireSuccessChance = 10;
-            this.fireRateStartRange = 5;
-            this.fireRateEndRange = 60;
             this.lastFireTimeStamp = 0;
-            // this.fireRate = 3000
+            this.fireRate = 1000;
             // this.speed = 2;
         }
 
         update(deltaTime) {
-            this.lastFireTimeStamp = Math.floor(this.lastFireTimeStamp + deltaTime);
+            this.lastFireTimeStamp += deltaTime;
             this.shoot();
 
             this.projectiles.forEach(projectile => projectile.update());
@@ -303,26 +328,21 @@ window.addEventListener('load', function () {
             this.projectiles.forEach(projectile => projectile.draw(context));
 
             context.drawImage(this.image, this.x, this.y, this.width, this.height);
-
         }
 
         shoot() {
-            let randomFireRate = Math.floor(Math.random() * this.fireRateEndRange + this.fireRateStartRange) * 1000;
-            if (this.lastFireTimeStamp > randomFireRate) {
-                let fireChance = Math.floor(Math.random() * 100);
-                if (fireChance < this.fireSuccessChance) this.projectiles.push(new EnemyProjectile(this.game, this.x + (this.width * .44), this.y, this.projectileImage));
-                this.lastFireTimeStamp = 0;
-            }
+            let randomFireRate = Math.floor(((Math.random() * this.game.fireRateEndRange) + this.game.fireRateStartRange) * 1000);
 
-            if (this.game.gameTimeMinutes > this.game.timeToIncreaseDifficulty) {
-                if (this.fireSuccessChance < 100) this.fireSuccessChance += 5;
-                if (this.fireSuccessChance >= 100) {
-                    if (this.fireRateStartRange > 1) this.fireRateStartRange--;
+            if (this.lastFireTimeStamp >= randomFireRate) {
+
+                let fireChance = Math.round(Math.random() * 100);
+                if (this.game.fireSuccessChance >= fireChance) {
+                    this.projectiles.push(new EnemyProjectile(this.game, this.x + (this.width * .44), this.y, this.projectileImage));
                 }
+                this.lastFireTimeStamp = 0;
 
-                if (this.game.gameTimeMinutes < 60) this.game.timeToIncreaseDifficulty += this.game.gameTimeMinutes;
-                else this.game.gameTimeMinutes = 5;
             }
+
         }
     }
 
@@ -491,6 +511,7 @@ window.addEventListener('load', function () {
             this.game = game;
             this.titleFontSize = 80;
             this.textFontSize = 45;
+            this.subtextFontSize = 25;
             this.fontFamily = 'Nunito';
             this.fontColor = 'white';
             this.titleMaxWidth = 350;
@@ -513,8 +534,10 @@ window.addEventListener('load', function () {
             // Controls
             context.font = this.textFontSize + 'px ' + this.fontFamily;
             context.fillText(`Press Enter to Start`, this.game.width * .5, this.game.height * .5);
-
-
+            context.font = this.subtextFontSize + 'px ' + this.fontFamily;
+            context.fillText(`Use your webcam to move left, right, and shoot.`, this.game.width * .5, this.game.height * .55);
+            context.fillText(`Motion found within the red boxes triggers corresponding movement.`, this.game.width * .5, this.game.height * .58);
+            context.fillText(`Alternatively, use the arrow keys and spacebar to move and shoot.`, this.game.width * .5, this.game.height * .61);
 
             context.restore();
         }
@@ -530,13 +553,19 @@ window.addEventListener('load', function () {
             this.input = new InputHandler(this);
             this.player = new Player(this);
             this.playerLives = 3;
+            this.maxPlayerLives = 9;
             this.keys = [];
             this.deltaTime = 0;
             this.gameTimeSeconds = 0;
             this.gameTimeMinutes = 0;
             this.gameTimeHours = 0;
-            this.timeToIncreaseDifficulty = 5;
+            this.defaultTimeIncDiff = 1;
+            this.timeToIncreaseDifficulty = this.defaultTimeIncDiff;
+            this.increaseDifficulty = false;
             this.timeSurvived = '';
+            this.fireSuccessChance = 10;
+            this.fireRateStartRange = 5;
+            this.fireRateEndRange = 50;
             this.enemyClasses = [
                 BlackEnemy1,
                 BlackEnemy2,
@@ -544,7 +573,7 @@ window.addEventListener('load', function () {
                 BlackEnemy4,
             ];
             // enemy row coordinates
-            this.xAxis = this.width * .51;
+            this.xAxis = this.width * .50;
             this.xPadding = 100;
 
             this.firstRowAxisY = 100;
@@ -628,6 +657,7 @@ window.addEventListener('load', function () {
             this.fourthRowRespawn = 5000;
 
             this.score = 0;
+            this.scoreToIncreaseLife = 2000;
             this.gameSpeed = 1;
             this.gameStart = false;
             this.gameOver = false;
@@ -641,6 +671,7 @@ window.addEventListener('load', function () {
 
             if (this.gameStart) {
                 this.gameTimeSeconds += deltaTime;
+
                 if (this.gameTimeSeconds > 60000) {
                     this.gameTimeMinutes++;
                     this.gameTimeSeconds = 0;
@@ -648,6 +679,21 @@ window.addEventListener('load', function () {
                 if (this.gameTimeMinutes >= 60) {
                     this.gameTimeHours++;
                     this.gameTimeMinutes = 0;
+                    this.timeToIncreaseDifficulty = this.defaultTimeIncDiff;
+                }
+
+                if (this.increaseDifficulty) {
+                    if (this.fireSuccessChance < 100) this.fireSuccessChance += 5;
+                    if (this.fireSuccessChance >= 100) {
+                        if (this.fireRateStartRange > 1) this.fireRateStartRange--;
+                        if (this.fireRateEndRange > 2) this.fireRateEndRange--;
+                    }
+                    this.increaseDifficulty = false;
+                }
+
+                if (this.gameTimeMinutes >= this.timeToIncreaseDifficulty) {
+                    this.timeToIncreaseDifficulty += this.defaultTimeIncDiff;
+                    this.increaseDifficulty = true;
                 }
 
                 if (this.firstRowEnemies.length === 0 && this.isFirstRowComplete) this.firstRowSpawnCounter += deltaTime;
@@ -669,7 +715,7 @@ window.addEventListener('load', function () {
 
                 this.onEnemyCollision(...this.firstRowEnemies, ...this.secondRowEnemies, ...this.thirdRowEnemies, ...this.fourthRowEnemies);
 
-                if (!this.gameOver) {
+                if (!this.gameOver && this.gameStart) {
                     this.addEnemy();
                 } else {
                     this.firstRowEnemies.length = 0;
@@ -678,10 +724,10 @@ window.addEventListener('load', function () {
                     this.fourthRowEnemies.length = 0;
                     this.player.projectiles.length = 0;
                 }
-
             } else {
                 this.splashScreen.update();
             }
+
         }
 
         draw(context) {
@@ -785,6 +831,11 @@ window.addEventListener('load', function () {
                         if (enemy.life <= 0) {
                             enemy.forDeletion = true;
                             this.score += enemy.score;
+
+                            if (this.score > this.scoreToIncreaseLife) {
+                                if (this.playerLives < this.maxPlayerLives) this.playerLives++;
+                                this.scoreToIncreaseLife += this.scoreToIncreaseLife;
+                            }
                         }
 
                     }
@@ -801,12 +852,15 @@ window.addEventListener('load', function () {
         }
 
         onPlayerHit() {
-            this.playerLives--;
-            if (this.playerLives <= 0) {
-                this.player.x = 5000;
-                this.player.y = 5000;
-                this.gameOver = true;
-                this.timeSurvived = this.gameTimeHours + ":" + this.gameTimeMinutes + ":" + (this.gameTimeSeconds * .001).toFixed(1);
+            if (!this.player.isInvincible) {
+                this.player.isInvincible = true;
+                this.playerLives--;
+                if (this.playerLives <= 0) {
+                    this.player.x = 5000;
+                    this.player.y = 5000;
+                    this.gameOver = true;
+                    this.timeSurvived = this.gameTimeHours + ":" + this.gameTimeMinutes + ":" + (this.gameTimeSeconds * .001).toFixed(1);
+                }
             }
         }
 
