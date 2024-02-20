@@ -1,7 +1,7 @@
 'use strict';
 
-import { init as webcamInit } from "./Scripts/webcam.js";
-import { Game } from "./Scripts/game.js";
+import { init as webcamInit } from "./Assets/Scripts/webcam.js";
+import { Game } from "./Assets/Scripts/game.js";
 
 window.addEventListener('load', function () {
     // Canvas Setup
