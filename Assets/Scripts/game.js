@@ -120,6 +120,12 @@ class Game {
         this.fourthRowSpawnCounter = 0;
         this.fourthRowRespawn = 5000;
 
+        this.startBGM = new Audio();
+        this.startBGM.src = "/Assets/Audio/GameStart.wav";
+        this.startBGM.volume *= .5;
+        this.endBGM = new Audio();
+        this.endBGM.src = "/Assets/Audio/Ending.wav";
+        this.endBGM.volume *= .5;
         this.score = 0;
         this.scoreToIncreaseLife = 2000;
         this.gameSpeed = 1;
@@ -179,9 +185,22 @@ class Game {
 
             this.onEnemyCollision(...this.firstRowEnemies, ...this.secondRowEnemies, ...this.thirdRowEnemies, ...this.fourthRowEnemies);
 
-            if (!this.gameOver && this.gameStart) {
+            if (!this.gameOver) {
                 this.addEnemy();
+
+                this.splashScreen.sound.pause();
+                this.startBGM.play();
+                this.endBGM.currentTime = 0;
+                this.endBGM.pause();
+
+                if (this.startBGM.currentTime >= this.startBGM.duration - .05) this.startBGM.currentTime = 0;
             } else {
+                this.startBGM.pause();
+                this.startBGM.currentTime = 0;
+                this.endBGM.play();
+
+                if (this.endBGM.currentTime >= this.endBGM.duration - .05) this.endBGM.currentTime = 0;
+
                 this.firstRowEnemies.length = 0;
                 this.secondRowEnemies.length = 0;
                 this.thirdRowEnemies.length = 0;
@@ -293,6 +312,7 @@ class Game {
                     enemy.life--;
                     projectile.forDeletion = true;
                     if (enemy.life <= 0) {
+                        enemy.destroySound.play();
                         enemy.forDeletion = true;
                         this.score += enemy.score;
 
@@ -319,6 +339,7 @@ class Game {
         if (!this.player.isInvincible) {
             this.player.isInvincible = true;
             this.playerLives--;
+            this.player.hitSound.play();
             if (this.playerLives <= 0) {
                 this.player.x = 5000;
                 this.player.y = 5000;
@@ -346,6 +367,9 @@ class Game {
         this.isSecondRowComplete = false;
         this.isThirdRowComplete = false;
         this.isFourthRowComplete = false;
+        this.fireSuccessChance = 10;
+        this.fireRateStartRange = 5;
+        this.fireRateEndRange = 50;
     }
 }
 

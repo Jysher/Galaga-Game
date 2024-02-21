@@ -13,6 +13,12 @@ class Enemy {
         this.lastFireTimeStamp = 0;
         this.fireRate = 1000;
         // this.speed = 2;
+        this.shootSound = new Audio();
+        this.shootSound.src = "/Assets/Audio/enemyLaserSFX.ogg";
+        this.shootSound.volume *= .7;
+        this.destroySound = new Audio();
+        this.destroySound.src = "/Assets/Audio/enemyDestroyed.ogg";
+        this.destroySound.volume *= .7;
     }
 
     update(deltaTime) {
@@ -42,6 +48,7 @@ class Enemy {
             let fireChance = Math.round(Math.random() * 100);
             if (this.game.fireSuccessChance >= fireChance) {
                 this.projectiles.push(new EnemyProjectile(this.game, this.x + (this.width * .44), this.y, this.projectileImage));
+                this.shootSound.play();
             }
             this.lastFireTimeStamp = 0;
 

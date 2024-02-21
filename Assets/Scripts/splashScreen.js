@@ -10,9 +10,17 @@ class SplashScreen {
         this.fontColor = 'white';
         this.titleMaxWidth = 350;
         this.titlePaddingX = 100;
+        this.sound = new Audio();
+        this.sound.src = "/Assets/Audio/TitleScreen.wav";
+        this.sound.volume *= .5;
     }
 
     update() {
+        if (this.game.deltaTime >= 1) {
+            this.sound.play().catch(() => console.log());
+
+            if (this.sound.currentTime >= this.sound.duration - .05) this.sound.currentTime = 0;
+        }
 
     }
 

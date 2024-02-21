@@ -15,7 +15,7 @@ class Player {
         this.keysSpeedMultiplier = 1;
         this.camSpeedMultiplier = 2;
         this.projectiles = [];
-        this.fireRate = 250; // in milliseconds
+        this.fireRate = 500; // in milliseconds
         this.lastFireTimeStamp = 0;
         this.isInvincible = false;
         this.timeInvincible = 3000; //in milliseconds
@@ -23,6 +23,12 @@ class Player {
         this.blinkTimer = this.blinkRate * 2;
         this.defaultBlinkTimer = this.blinkTimer;
         this.isBlinking = false;
+        this.shootSound = new Audio();
+        this.shootSound.src = "/Assets/Audio/playerLaserSFX.ogg";
+        this.shootSound.volume *= .8;
+        this.hitSound = new Audio();
+        this.hitSound.src = "/Assets/Audio/playerHit.ogg";
+        this.hitSound.volume *= .8;
     }
 
     update(deltaTime) {
@@ -90,10 +96,13 @@ class Player {
         if (this.lastFireTimeStamp > this.fireRate) {
             this.projectiles.push(new PlayerProjectile(this.game, this.x + (this.width * .35), this.y));
             this.lastFireTimeStamp = 0;
+            this.shootSound.play();
         }
     }
 
     restart() {
+        this.isInvincible = false;
+        this.isBlinking = false;
         this.projectiles.length = 0;
         this.x = (this.game.width * .5) - (this.width * .5);
         this.y = (this.game.height * .95) - (this.height * .95);
