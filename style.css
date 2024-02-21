@@ -30,7 +30,8 @@ body {
 #enemy-default-projectile,
 #enemy-1-projectile,
 #enemy-2-projectile,
-#webCam {
+#webCam,
+#blendCanvas {
   display: none;
 }
 
