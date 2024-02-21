@@ -11,7 +11,7 @@ class SplashScreen {
         this.titleMaxWidth = 350;
         this.titlePaddingX = 100;
         this.sound = new Audio();
-        this.sound.src = "/Assets/Audio/TitleScreen.wav";
+        this.sound.src = "Assets/Audio/TitleScreen.wav";
         this.sound.volume *= .5;
     }
 

@@ -121,10 +121,10 @@ class Game {
         this.fourthRowRespawn = 5000;
 
         this.startBGM = new Audio();
-        this.startBGM.src = "/Assets/Audio/GameStart.wav";
+        this.startBGM.src = "Assets/Audio/GameStart.wav";
         this.startBGM.volume *= .5;
         this.endBGM = new Audio();
-        this.endBGM.src = "/Assets/Audio/Ending.wav";
+        this.endBGM.src = "Assets/Audio/Ending.wav";
         this.endBGM.volume *= .5;
         this.score = 0;
         this.scoreToIncreaseLife = 2000;

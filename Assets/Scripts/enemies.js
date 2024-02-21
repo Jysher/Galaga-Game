@@ -14,10 +14,10 @@ class Enemy {
         this.fireRate = 1000;
         // this.speed = 2;
         this.shootSound = new Audio();
-        this.shootSound.src = "/Assets/Audio/enemyLaserSFX.ogg";
+        this.shootSound.src = "Assets/Audio/enemyLaserSFX.ogg";
         this.shootSound.volume *= .7;
         this.destroySound = new Audio();
-        this.destroySound.src = "/Assets/Audio/enemyDestroyed.ogg";
+        this.destroySound.src = "Assets/Audio/enemyDestroyed.ogg";
         this.destroySound.volume *= .7;
     }
 

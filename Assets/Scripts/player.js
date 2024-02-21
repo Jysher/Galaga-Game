@@ -24,10 +24,10 @@ class Player {
         this.defaultBlinkTimer = this.blinkTimer;
         this.isBlinking = false;
         this.shootSound = new Audio();
-        this.shootSound.src = "/Assets/Audio/playerLaserSFX.ogg";
+        this.shootSound.src = "Assets/Audio/playerLaserSFX.ogg";
         this.shootSound.volume *= .8;
         this.hitSound = new Audio();
-        this.hitSound.src = "/Assets/Audio/playerHit.ogg";
+        this.hitSound.src = "Assets/Audio/playerHit.ogg";
         this.hitSound.volume *= .8;
     }
 
